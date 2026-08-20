@@ -1,0 +1,14 @@
+{
+  "name": "soundwave",
+  "version": "1.0.0",
+  "private": true,
+  "description": "监控视频声音波形定位工具",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "mock": "node mock/gen.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}

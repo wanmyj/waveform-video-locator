@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>监控声音波形定位</title>
+<style>
+  body { font-family: system-ui, sans-serif; background: #111; color: #eee; margin: 0; padding: 16px; }
+  h1 { font-size: 16px; font-weight: 600; margin: 0 0 12px; }
+  #fileList { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-bottom: 8px; }
+  #fileList label { font-size: 13px; cursor: pointer; }
+  button { background: #2563eb; color: #fff; border: none; padding: 6px 14px; border-radius: 4px; cursor: pointer; font-size: 13px; }
+  button:hover { background: #1d4ed8; }
+  #toolbar { display: flex; align-items: center; gap: 8px; margin: 12px 0 4px; }
+  #waveformWrap { position: relative; border: 1px solid #333; border-radius: 4px; }
+  #waveform { width: 100%; overflow-x: auto; }
+  #thumbPreview {
+    position: fixed; display: none; z-index: 10; pointer-events: none;
+    background: #000; border: 2px solid #2563eb; border-radius: 4px; padding: 2px;
+    transform: translate(-50%, -110%);
+  }
+  #thumbPreview img { display: block; width: 160px; height: auto; }
+  #thumbPreview .t { text-align: center; font-size: 11px; color: #9cf; padding-top: 2px; }
+  #player { margin-top: 12px; max-width: 480px; width: 100%; background: #000; }
+  #status { font-size: 12px; color: #999; margin-top: 6px; }
+</style>
+</head>
+<body>
+  <h1>监控视频声音波形定位</h1>
+  <div id="fileList">加载文件列表中...</div>
+  <div id="toolbar">
+    <button id="loadBtn">加载所选文件的波形</button>
+    <button id="zoomOut">缩小 -</button>
+    <button id="zoomIn">放大 +</button>
+    <span style="font-size:12px;color:#999">滚轮=左右平移，Ctrl+滚轮=缩放，点击/拖动波形=定位并预览画面</span>
+  </div>
+  <div id="waveformWrap">
+    <div id="waveform"></div>
+  </div>
+  <div id="status"></div>
+  <video id="player" controls></video>
+
+  <div id="thumbPreview"><img id="thumbImg"><div class="t" id="thumbTime"></div></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
