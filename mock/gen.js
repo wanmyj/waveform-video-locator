@@ -5,6 +5,8 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const OUT_DIR = __dirname;
+const FFMPEG_DIR = process.env.FFMPEG_DIR || 'C:\\Users\\czhao6\\Downloads\\LosslessCut-win-x64\\resources';
+const FFMPEG = process.env.FFMPEG_BIN || path.join(FFMPEG_DIR, 'ffmpeg.exe');
 
 // [filename, durationSeconds, burstTimesSeconds]
 const CLIPS = [
@@ -46,7 +48,7 @@ function buildArgs(outPath, duration, bursts) {
 for (const [name, duration, bursts] of CLIPS) {
   const outPath = path.join(OUT_DIR, name);
   console.log(`generating ${name} (bursts at ${bursts.join(', ') || 'none'})`);
-  const result = spawnSync('ffmpeg', buildArgs(outPath, duration, bursts), { stdio: 'inherit' });
+  const result = spawnSync(FFMPEG, buildArgs(outPath, duration, bursts), { stdio: 'inherit' });
   if (result.status !== 0) {
     console.error(`failed to generate ${name}`);
     process.exit(1);

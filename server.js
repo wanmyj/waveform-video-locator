@@ -9,6 +9,10 @@ const MOCK_DIR = path.join(__dirname, 'mock');
 const CACHE_DIR = path.join(__dirname, 'cache');
 const VIDEO_EXT = new Set(['.mp4', '.avi', '.mkv', '.mov']);
 
+const FFMPEG_DIR = process.env.FFMPEG_DIR || 'C:\\Users\\czhao6\\Downloads\\LosslessCut-win-x64\\resources';
+const FFMPEG = process.env.FFMPEG_BIN || path.join(FFMPEG_DIR, 'ffmpeg.exe');
+const FFPROBE = process.env.FFPROBE_BIN || path.join(FFMPEG_DIR, 'ffprobe.exe');
+
 fs.mkdirSync(MOCK_DIR, { recursive: true });
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 
@@ -44,7 +48,7 @@ function resolveVideo(name) {
 
 async function ffprobeDuration(filePath) {
   return new Promise((resolve, reject) => {
-    const p = spawn('ffprobe', [
+    const p = spawn(FFPROBE, [
       '-v', 'error',
       '-show_entries', 'format=duration',
       '-of', 'default=noprint_wrappers=1:nokey=1',
@@ -114,7 +118,7 @@ app.get('/api/waveform-audio', async (req, res) => {
       for (let i = 0; i < files.length; i++) {
         const src = path.join(MOCK_DIR, files[i]);
         const tmp = path.join(CACHE_DIR, `_tmp_${key}_${i}.wav`);
-        await run('ffmpeg', ['-y', '-i', src, '-vn', '-ac', '1', '-ar', '8000', tmp]);
+        await run(FFMPEG, ['-y', '-i', src, '-vn', '-ac', '1', '-ar', '8000', tmp]);
         tmpWavs.push(tmp);
       }
       const listFile = path.join(CACHE_DIR, `_tmp_${key}_list.txt`);
@@ -123,7 +127,7 @@ app.get('/api/waveform-audio', async (req, res) => {
         .join('\n');
       fs.writeFileSync(listFile, listContent);
 
-      await run('ffmpeg', ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outPath]);
+      await run(FFMPEG, ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outPath]);
 
       for (const t of tmpWavs) fs.unlinkSync(t);
       fs.unlinkSync(listFile);
@@ -151,7 +155,7 @@ app.get('/api/thumbnail', async (req, res) => {
     const outPath = path.join(CACHE_DIR, `thumb_${key}_${bucket}.jpg`);
 
     if (!fs.existsSync(outPath)) {
-      await run('ffmpeg', ['-y', '-ss', String(bucket), '-i', filePath, '-frames:v', '1', '-q:v', '4', outPath]);
+      await run(FFMPEG, ['-y', '-ss', String(bucket), '-i', filePath, '-frames:v', '1', '-q:v', '4', outPath]);
     }
     res.sendFile(outPath);
   } catch (err) {

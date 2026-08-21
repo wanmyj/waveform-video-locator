@@ -148,4 +148,11 @@ loadBtn.addEventListener('click', () => {
   loadWaveform(selected);
 });
 
+window.addEventListener('keydown', (e) => {
+  if (e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); player.paused ? player.play() : player.pause(); }
+  else if (e.code === 'ArrowLeft') { e.preventDefault(); player.currentTime = Math.max(0, player.currentTime - 5); }
+  else if (e.code === 'ArrowRight') { e.preventDefault(); player.currentTime += 5; }
+});
+
 loadFileList();
