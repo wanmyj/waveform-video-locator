@@ -4,11 +4,20 @@
   "private": true,
   "description": "监控视频声音波形定位工具",
   "main": "server.js",
+  "bin": "server.js",
   "scripts": {
     "start": "node server.js",
-    "mock": "node mock/gen.js"
+    "mock": "node mock/gen.js",
+    "build:exe": "pkg . --output dist/soundwave.exe"
   },
   "dependencies": {
     "express": "^4.19.2"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
+  },
+  "pkg": {
+    "assets": ["public/**/*"],
+    "targets": ["node18-win-x64"]
   }
 }

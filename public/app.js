@@ -1,5 +1,9 @@
 import WaveSurfer from 'https://unpkg.com/wavesurfer.js@7/dist/wavesurfer.esm.js';
 
+const videoDirInput = document.getElementById('videoDirInput');
+const ffmpegDirInput = document.getElementById('ffmpegDirInput');
+const saveConfigBtn = document.getElementById('saveConfigBtn');
+const configStatus = document.getElementById('configStatus');
 const fileListEl = document.getElementById('fileList');
 const loadBtn = document.getElementById('loadBtn');
 const zoomInBtn = document.getElementById('zoomIn');
@@ -17,10 +21,34 @@ let totalDuration = 0;
 let pxPerSec = 50;
 let currentFile = null;
 
+function showConfigErrors(errors) {
+  const msgs = Object.values(errors || {});
+  configStatus.style.color = msgs.length ? '#f87171' : '#4ade80';
+  configStatus.textContent = msgs.length ? msgs.join('；') : '已保存';
+}
+
+async function loadConfig() {
+  const cfg = await fetch('/api/config').then((r) => r.json());
+  videoDirInput.value = cfg.videoDir || '';
+  ffmpegDirInput.value = cfg.ffmpegDir || '';
+  showConfigErrors(cfg.errors);
+}
+
+saveConfigBtn.addEventListener('click', async () => {
+  const res = await fetch('/api/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ videoDir: videoDirInput.value.trim(), ffmpegDir: ffmpegDirInput.value.trim() }),
+  });
+  const data = await res.json();
+  showConfigErrors(res.ok ? null : data.errors);
+  if (res.ok) loadFileList();
+});
+
 async function loadFileList() {
   const files = await fetch('/api/files').then((r) => r.json());
   if (!files.length) {
-    fileListEl.textContent = 'mock/ 目录下没有找到视频文件，先运行 npm run mock 生成测试素材。';
+    fileListEl.textContent = '视频文件夹下没有找到视频文件，请检查上方的文件夹设置。';
     return;
   }
   fileListEl.innerHTML = files
@@ -155,4 +183,5 @@ window.addEventListener('keydown', (e) => {
   else if (e.code === 'ArrowRight') { e.preventDefault(); player.currentTime += 5; }
 });
 
+loadConfig();
 loadFileList();

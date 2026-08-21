@@ -5,19 +5,59 @@ const crypto = require('crypto');
 const { spawn } = require('child_process');
 
 const PORT = process.env.PORT || 3334;
-const MOCK_DIR = path.join(__dirname, 'mock');
-const CACHE_DIR = path.join(__dirname, 'cache');
+// pkg's snapshot fs is read-only, so writable state (cache, config) must live
+// next to the actual .exe rather than under __dirname when packaged.
+const BASE_DIR = process.pkg ? path.dirname(process.execPath) : __dirname;
+const CACHE_DIR = path.join(BASE_DIR, 'cache');
+const CONFIG_PATH = path.join(BASE_DIR, 'config.json');
 const VIDEO_EXT = new Set(['.mp4', '.avi', '.mkv', '.mov']);
 
-const FFMPEG_DIR = process.env.FFMPEG_DIR || 'C:\\Users\\czhao6\\Downloads\\LosslessCut-win-x64\\resources';
-const FFMPEG = process.env.FFMPEG_BIN || path.join(FFMPEG_DIR, 'ffmpeg.exe');
-const FFPROBE = process.env.FFPROBE_BIN || path.join(FFMPEG_DIR, 'ffprobe.exe');
+let config = { videoDir: '', ffmpegDir: '' };
+try {
+  Object.assign(config, JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')));
+} catch {}
+if (!config.videoDir) config.videoDir = process.env.VIDEO_DIR || path.join(__dirname, 'mock');
+if (!config.ffmpegDir) config.ffmpegDir = process.env.FFMPEG_DIR || '';
 
-fs.mkdirSync(MOCK_DIR, { recursive: true });
+function saveConfig() {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+}
+
+function ffmpegBin() { return path.join(config.ffmpegDir, 'ffmpeg.exe'); }
+function ffprobeBin() { return path.join(config.ffmpegDir, 'ffprobe.exe'); }
+
+// Checks the configured dirs are actually usable; returned as a map so the
+// web UI can show which field is wrong.
+function configErrors(videoDir, ffmpegDir) {
+  const errors = {};
+  if (!videoDir || !fs.existsSync(videoDir) || !fs.statSync(videoDir).isDirectory()) {
+    errors.videoDir = '目录不存在';
+  }
+  if (!ffmpegDir || !fs.existsSync(path.join(ffmpegDir, 'ffmpeg.exe')) || !fs.existsSync(path.join(ffmpegDir, 'ffprobe.exe'))) {
+    errors.ffmpegDir = '该目录下未找到 ffmpeg.exe / ffprobe.exe';
+  }
+  return errors;
+}
+
 fs.mkdirSync(CACHE_DIR, { recursive: true });
 
 const app = express();
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/api/config', (req, res) => {
+  res.json({ ...config, errors: configErrors(config.videoDir, config.ffmpegDir) });
+});
+
+app.post('/api/config', (req, res) => {
+  const videoDir = String(req.body?.videoDir || '').trim();
+  const ffmpegDir = String(req.body?.ffmpegDir || '').trim();
+  const errors = configErrors(videoDir, ffmpegDir);
+  if (Object.keys(errors).length) return res.status(400).json({ errors });
+  config = { videoDir, ffmpegDir };
+  saveConfig();
+  res.json({ ...config });
+});
 
 function run(cmd, args) {
   return new Promise((resolve, reject) => {
@@ -33,22 +73,24 @@ function run(cmd, args) {
 }
 
 function listVideos() {
-  return fs.readdirSync(MOCK_DIR)
+  if (!fs.existsSync(config.videoDir)) return [];
+  return fs.readdirSync(config.videoDir)
     .filter((f) => VIDEO_EXT.has(path.extname(f).toLowerCase()))
     .sort();
 }
 
-// Resolve a client-supplied filename to a real path inside MOCK_DIR, refusing
-// anything not present in the directory listing (blocks path traversal).
+// Resolve a client-supplied filename to a real path inside the configured
+// video dir, refusing anything not present in the directory listing (blocks
+// path traversal).
 function resolveVideo(name) {
   const base = path.basename(String(name || ''));
   if (!listVideos().includes(base)) return null;
-  return path.join(MOCK_DIR, base);
+  return path.join(config.videoDir, base);
 }
 
 async function ffprobeDuration(filePath) {
   return new Promise((resolve, reject) => {
-    const p = spawn(FFPROBE, [
+    const p = spawn(ffprobeBin(), [
       '-v', 'error',
       '-show_entries', 'format=duration',
       '-of', 'default=noprint_wrappers=1:nokey=1',
@@ -79,7 +121,7 @@ async function buildOffsets(names) {
   let offset = 0;
   const result = [];
   for (const file of files) {
-    const filePath = path.join(MOCK_DIR, file);
+    const filePath = path.join(config.videoDir, file);
     const duration = await ffprobeDuration(filePath);
     result.push({ file, offset, duration });
     offset += duration;
@@ -89,7 +131,7 @@ async function buildOffsets(names) {
 
 app.get('/api/files', (req, res) => {
   const files = listVideos().map((name) => {
-    const stat = fs.statSync(path.join(MOCK_DIR, name));
+    const stat = fs.statSync(path.join(config.videoDir, name));
     return { name, size: stat.size };
   });
   res.json(files);
@@ -116,9 +158,9 @@ app.get('/api/waveform-audio', async (req, res) => {
     if (!fs.existsSync(outPath)) {
       const tmpWavs = [];
       for (let i = 0; i < files.length; i++) {
-        const src = path.join(MOCK_DIR, files[i]);
+        const src = path.join(config.videoDir, files[i]);
         const tmp = path.join(CACHE_DIR, `_tmp_${key}_${i}.wav`);
-        await run(FFMPEG, ['-y', '-i', src, '-vn', '-ac', '1', '-ar', '8000', tmp]);
+        await run(ffmpegBin(), ['-y', '-i', src, '-vn', '-ac', '1', '-ar', '8000', tmp]);
         tmpWavs.push(tmp);
       }
       const listFile = path.join(CACHE_DIR, `_tmp_${key}_list.txt`);
@@ -127,7 +169,7 @@ app.get('/api/waveform-audio', async (req, res) => {
         .join('\n');
       fs.writeFileSync(listFile, listContent);
 
-      await run(FFMPEG, ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outPath]);
+      await run(ffmpegBin(), ['-y', '-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', outPath]);
 
       for (const t of tmpWavs) fs.unlinkSync(t);
       fs.unlinkSync(listFile);
@@ -155,7 +197,7 @@ app.get('/api/thumbnail', async (req, res) => {
     const outPath = path.join(CACHE_DIR, `thumb_${key}_${bucket}.jpg`);
 
     if (!fs.existsSync(outPath)) {
-      await run(FFMPEG, ['-y', '-ss', String(bucket), '-i', filePath, '-frames:v', '1', '-q:v', '4', outPath]);
+      await run(ffmpegBin(), ['-y', '-ss', String(bucket), '-i', filePath, '-frames:v', '1', '-q:v', '4', outPath]);
     }
     res.sendFile(outPath);
   } catch (err) {
