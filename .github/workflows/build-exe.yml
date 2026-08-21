@@ -19,15 +19,19 @@ jobs:
         with:
           node-version: 18
       - run: npm ci
-      - run: npm run build:exe
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: echo "value=${{ github.event.inputs.tag || format('build-{0}', github.run_number) }}" >> "$GITHUB_OUTPUT"
+      - run: npx pkg . --output "dist/soundwave-${{ steps.tag.outputs.value }}.exe"
       - uses: actions/upload-artifact@v4
         with:
           name: soundwave-exe
-          path: dist/soundwave.exe
+          path: dist/soundwave-${{ steps.tag.outputs.value }}.exe
       - name: Publish to release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.event.inputs.tag || format('build-{0}', github.run_number) }}
+          TAG: ${{ steps.tag.outputs.value }}
         run: |
-          gh release create "$TAG" dist/soundwave.exe --title "$TAG" --notes "Automated build" --repo "$GITHUB_REPOSITORY"
+          gh release create "$TAG" "dist/soundwave-$TAG.exe" --title "$TAG" --notes "Automated build" --repo "$GITHUB_REPOSITORY"
