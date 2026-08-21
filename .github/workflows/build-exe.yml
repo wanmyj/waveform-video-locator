@@ -2,6 +2,13 @@ name: Build exe
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag (e.g. v1.0.0). Leave empty to use run number.'
+        required: false
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -17,3 +24,10 @@ jobs:
         with:
           name: soundwave-exe
           path: dist/soundwave.exe
+      - name: Publish to release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || format('build-{0}', github.run_number) }}
+        run: |
+          gh release create "$TAG" dist/soundwave.exe --title "$TAG" --notes "Automated build" --repo "$GITHUB_REPOSITORY"
