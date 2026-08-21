@@ -31,10 +31,10 @@ function ffprobeBin() { return path.join(config.ffmpegDir, 'ffprobe.exe'); }
 function configErrors(videoDir, ffmpegDir) {
   const errors = {};
   if (!videoDir || !fs.existsSync(videoDir) || !fs.statSync(videoDir).isDirectory()) {
-    errors.videoDir = '目录不存在';
+    errors.videoDir = `目录不存在：${videoDir || '(未填写)'}`;
   }
   if (!ffmpegDir || !fs.existsSync(path.join(ffmpegDir, 'ffmpeg.exe')) || !fs.existsSync(path.join(ffmpegDir, 'ffprobe.exe'))) {
-    errors.ffmpegDir = '该目录下未找到 ffmpeg.exe / ffprobe.exe';
+    errors.ffmpegDir = `该目录下未找到 ffmpeg.exe / ffprobe.exe：${ffmpegDir || '(未填写)'}`;
   }
   return errors;
 }
@@ -156,13 +156,12 @@ app.get('/api/waveform-audio', async (req, res) => {
     const outPath = path.join(CACHE_DIR, `waveform_${key}.wav`);
 
     if (!fs.existsSync(outPath)) {
-      const tmpWavs = [];
-      for (let i = 0; i < files.length; i++) {
-        const src = path.join(config.videoDir, files[i]);
-        const tmp = path.join(CACHE_DIR, `_tmp_${key}_${i}.wav`);
-        await run(ffmpegBin(), ['-y', '-i', src, '-vn', '-ac', '1', '-ar', '8000', tmp]);
-        tmpWavs.push(tmp);
-      }
+      // Extract each file's audio in parallel (independent ffmpeg calls) rather
+      // than one-at-a-time — this is what made loading 3+ files slow.
+      const tmpWavs = files.map((_, i) => path.join(CACHE_DIR, `_tmp_${key}_${i}.wav`));
+      await Promise.all(files.map((f, i) =>
+        run(ffmpegBin(), ['-y', '-i', path.join(config.videoDir, f), '-vn', '-ac', '1', '-ar', '8000', tmpWavs[i]])
+      ));
       const listFile = path.join(CACHE_DIR, `_tmp_${key}_list.txt`);
       const listContent = tmpWavs
         .map((p) => `file '${p.replace(/\\/g, '/')}'`)
